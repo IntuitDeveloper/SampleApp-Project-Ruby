@@ -1,0 +1,159 @@
+<% authenticated = session[:access_token].present? && session[:realm_id].present? %>
+<div class="container">
+  <div class="flash-messages">
+    <% if flash[:success] %>
+      <div class="flash-message success"><%= flash[:success] %></div>
+    <% end %>
+    <% if flash[:error] %>
+      <div class="flash-message error"><%= flash[:error] %></div>
+    <% end %>
+    <% if flash[:notice] %>
+      <div class="flash-message"><%= flash[:notice] %></div>
+    <% end %>
+  </div>
+
+  <div class="step-container">
+    <h2>QuickBooks Projects Demo</h2>
+
+    <div class="step">
+      <h3>Step 1: Connect to QuickBooks</h3>
+      <p>Click the button below to authenticate with QuickBooks using OAuth2</p>
+      <div class="top-actions">
+        <% if authenticated %>
+          <a href="javascript:void(0)" class="action-btn connected" style="text-decoration:none; display:block; text-align:center; background-color:#2e7d32; cursor: default;" aria-disabled="true">Connected to QuickBooks</a>
+        <% else %>
+          <a href="/qbo-login" class="action-btn" style="text-decoration:none; display:block; text-align:center;">Connect to QuickBooks</a>
+        <% end %>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>Step 2: Get Customers from QuickBooks</h3>
+      <p>Fetch your customer list from QuickBooks to create projects</p>
+      <form action="/call-qbo" method="GET">
+        <button type="submit" class="action-btn" <%= 'disabled' unless authenticated %>>Fetch Customers</button>
+      </form>
+      <% unless authenticated %>
+        <div class="step-info">
+          <p><em>Please complete Step 1 first</em></p>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="step">
+      <h3>Step 3: Create Project</h3>
+      <p>Select a customer and create a project for them</p>
+      <form action="/create-project" method="POST">
+        <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+        <div class="form-group">
+          <select name="customerName" id="customer-select" required <%= 'disabled' if (session[:customer_map].blank?) %>>
+            <option value="">-- Select a customer --</option>
+            <% (session[:customer_map] || {}).each_value do |customer| %>
+              <option value="<%= customer %>"><%= customer %></option>
+            <% end %>
+          </select>
+        </div>
+        <button type="submit" class="action-btn" <%= 'disabled' if (session[:customer_map].blank?) %>>Create Project</button>
+      </form>
+      <% if (session[:customer_map].blank?) %>
+        <div class="step-info">
+          <p><em>Please complete Step 2 first</em></p>
+        </div>
+      <% end %>
+    </div>
+
+    <% if session[:project] %>
+      <div class="project-details">
+        <h3>✅ Project Created Successfully!</h3>
+        <div class="project-info">
+          <p><strong>Project ID:</strong> <span><%= session[:project]["id"] %></span></p>
+          <p><strong>Name:</strong> <span><%= session[:project]["name"] %></span></p>
+          <p><strong>Description:</strong> <span><%= session[:project]["description"] %></span></p>
+          <p><strong>Status:</strong> <span><%= session[:project]["status"] %></span></p>
+          <p><strong>Start Date:</strong> <span><%= session[:project]["startDate"] %></span></p>
+          <p><strong>Due Date:</strong> <span><%= session[:project]["dueDate"] %></span></p>
+        </div>
+      </div>
+    <% end %>
+
+    <div class="step">
+      <h3>Step 4: Create Invoice for Project</h3>
+      <p>Create an invoice linked to your project</p>
+      <div class="invoice-form">
+        <form action="/create-invoice" method="POST">
+          <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+          <div class="form-group">
+            <label for="customer-invoice-select">Customer:</label>
+            <select name="customerId" id="customer-invoice-select" required <%= 'disabled' if session[:project].blank? %>>
+              <option value="">-- Select a customer --</option>
+              <% (session[:customer_map] || {}).each do |id, name| %>
+                <option value="<%= id %>"><%= name %></option>
+              <% end %>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="item-select">Item:</label>
+            <select name="itemId" id="item-select" required <%= 'disabled' if session[:project].blank? %> onchange="document.getElementById('item-name').value = this.options[this.selectedIndex].text;">
+              <option value="">-- Select an item --</option>
+              <% (session[:items] || []).each do |item| %>
+                <option value="<%= item["id"] %>"><%= item["name"] %></option>
+              <% end %>
+            </select>
+            <input type="hidden" id="item-name" name="itemName" value="">
+          </div>
+          <div class="form-group">
+            <label for="quantity">Quantity:</label>
+            <input type="number" name="quantity" id="quantity" required min="1" value="1" <%= 'disabled' if session[:project].blank? %>>
+          </div>
+          <div class="form-group">
+            <label for="amount">Unit Price ($):</label>
+            <input type="number" step="0.01" name="amount" id="amount" required min="0.01" placeholder="Price per item" <%= 'disabled' if session[:project].blank? %>>
+          </div>
+          <div class="form-group">
+            <label for="description">Description (optional):</label>
+            <input type="text" name="description" id="description" placeholder="Invoice description" <%= 'disabled' if session[:project].blank? %>>
+          </div>
+          <input type="hidden" name="projectId" value="<%= session[:project] && session[:project]["id"] %>">
+          <button type="submit" class="action-btn" style="background: linear-gradient(135deg, #2E7D32, #43A047);" <%= 'disabled' if session[:project].blank? %>>Create Invoice</button>
+        </form>
+        <% if session[:project].blank? %>
+          <div class="step-info">
+            <p><em>Please complete Step 3 first</em></p>
+          </div>
+        <% end %>
+      </div>
+    </div>
+
+    <% if session[:invoiceId] %>
+      <div class="invoice-details" id="invoice-success">
+        <h3>✅ Invoice Created Successfully!</h3>
+        <div class="invoice-info">
+          <p><strong>Invoice ID:</strong> <span><%= session[:invoiceId] %></span></p>
+          <% if session[:invoiceNumber] %>
+            <p><strong>Invoice Number:</strong> <span><%= session[:invoiceNumber] %></span></p>
+          <% end %>
+          <p><strong>Linked to Project ID:</strong> <span><%= session[:invoiceProjectId] %></span></p>
+          <p><strong>Amount:</strong> $<span><%= sprintf('%.2f', session[:invoiceAmount].to_f) %></span></p>
+          <div class="deep-link-section">
+            <a href="<%= session[:invoiceDeepLink] %>" target="_blank" class="deep-link-btn">View Invoice in QuickBooks</a>
+            <p class="deep-link-info">Click the link above to view your invoice directly in QuickBooks Online</p>
+          </div>
+        </div>
+      </div>
+    <% end %>
+
+    <div class="step" style="text-align:center;">
+      <% if authenticated %>
+        <form action="/refresh-token" method="POST" style="display:inline-block; margin-right: 12px;">
+          <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+          <button type="submit" class="action-btn refresh-btn">Refresh Token</button>
+        </form>
+        <form action="/logout" method="GET" style="display:inline-block;">
+          <button type="submit" class="action-btn logout-btn">Disconnect from QuickBooks</button>
+        </form>
+      <% end %>
+    </div>
+  </div>
+</div>
+
+

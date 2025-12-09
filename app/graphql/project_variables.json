@@ -1,0 +1,10 @@
+{
+  "template": {
+    "name": "Project Demo {uuid}",
+    "description": "Project for {customerName}",
+    "priority": 3,
+    "pinned": false
+  }
+}
+
+
